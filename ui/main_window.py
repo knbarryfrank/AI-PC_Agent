@@ -350,11 +350,21 @@ class MainWindow(QMainWindow):
     @Slot(str)
     def on_user_message(self, text):
         self.agent_thread = AgentThread(text, browser_widget=self.browser_tab)
+        # Lock interaction for this turn
+        self.browser_tab.set_thread_lock(True)
+        
+        # Show specific notice if takeover (auto-approve) is on
+        if self.browser_tab.takeover_active:
+            self.chat_widget.append_system_message("\u26a1 AI TAKEOVER ACTIVE: Auto-approving all actions.")
+
         self.agent_thread.chat_response_signal.connect(self.chat_widget.append_ai_message)
         self.agent_thread.system_msg_signal.connect(self.chat_widget.append_system_message)
         self.agent_thread.token_usage_signal.connect(self.chat_widget.update_tokens)
         self.agent_thread.approval_request_signal.connect(self.on_approval_request)
         self.agent_thread.browser_action_signal.connect(self.on_browser_action)
+        
+        # Unlock thread (but respect Takeover button state) when done
+        self.agent_thread.finished.connect(lambda: self.browser_tab.set_thread_lock(False))
         
         self.chat_widget.append_system_message("Thinking...")
         self.agent_thread.start()
@@ -370,6 +380,8 @@ class MainWindow(QMainWindow):
             res = self.browser_tab.type_text(args.get("selector"), args.get("text"))
         elif action == "press_enter":
             res = self.browser_tab.press_enter_in(args.get("selector"))
+        elif action == "search":
+            res = self.browser_tab.smart_search(args.get("query"))
         elif action == "screenshot":
             pixmap = self.browser_tab.capture_screenshot()
             if pixmap:

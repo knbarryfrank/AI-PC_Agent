@@ -26,6 +26,9 @@ class AgentTools:
     def list_files(self):
         try:
             workspace = self.get_workspace()
+            if not os.path.exists(workspace):
+                return f"Error: Workspace path '{workspace}' does not exist."
+                
             items = os.listdir(workspace)
             summary_path = os.path.join(workspace, ".aipc_cache", "file_index.json")
             cache = {}
@@ -39,16 +42,93 @@ class AgentTools:
                     
             output = []
             for item in items:
-                if item == ".aipc_cache" or item == "venv":
+                if item == ".aipc_cache" or item == "venv" or item.startswith("."):
                     continue
                 if item in cache:
                     output.append(f"{item} (Summary: {cache[item].get('summary')})")
                 else:
                     output.append(item)
-                    
+            
+            if not output:
+                return f"Workspace '{workspace}' is empty."
             return f"Files in {workspace}:\n" + "\n".join(output)
         except Exception as e:
             return f"Error listing directory: {e}"
+
+    def open_file(self, filename: str):
+        """Open a file with the system's default application. 
+        Supports fuzzy matching (e.g. 'pptx' will find the first PowerPoint)."""
+        workspace = self.get_workspace()
+        path = os.path.join(workspace, filename)
+        
+        # Smart matching if not an exact file
+        if not os.path.exists(path):
+            candidates = os.listdir(workspace)
+            best_match = None
+            f_lower = filename.lower()
+            for c in candidates:
+                c_lower = c.lower()
+                ext = os.path.splitext(c_lower)[1].replace(".", "")
+                if f_lower == c_lower or f_lower in c_lower or (ext and ext in f_lower):
+                    best_match = c
+                    break
+            
+            if best_match:
+                path = os.path.join(workspace, best_match)
+                filename = best_match
+
+        if not os.path.exists(path) or os.path.isdir(path):
+            return f"Error: Could not find a file matching '{filename}' in '{workspace}'."
+            
+        approved, msg = self.check_approval(f"Open file: {filename}")
+        if not approved:
+            return "Execution rejected by user."
+
+        try:
+            os.startfile(path)
+            return f"Successfully launched {filename} with its default application."
+        except Exception as e:
+            return f"Error opening file {filename}: {e}"
+
+    def open_all_word_files(self):
+        """Find and open every .docx and .doc file in the workspace."""
+        workspace = self.get_workspace()
+        candidates = [f for f in os.listdir(workspace) if f.lower().endswith((".docx", ".doc"))]
+        if not candidates:
+            return "No MS Word files found in the workspace."
+            
+        approved, msg = self.check_approval(f"Open ALL Word files ({len(candidates)} files)")
+        if not approved:
+            return "Execution rejected by user."
+
+        results = []
+        for f in candidates:
+            try:
+                os.startfile(os.path.join(workspace, f))
+                results.append(f"Launched {f}")
+            except Exception as e:
+                results.append(f"Failed {f}: {e}")
+        return "\n".join(results)
+
+    def open_all_pptx_files(self):
+        """Find and open every .pptx and .ppt file in the workspace."""
+        workspace = self.get_workspace()
+        candidates = [f for f in os.listdir(workspace) if f.lower().endswith((".pptx", ".ppt"))]
+        if not candidates:
+            return "No PowerPoint files found in the workspace."
+            
+        approved, msg = self.check_approval(f"Open ALL PowerPoint files ({len(candidates)} files)")
+        if not approved:
+            return "Execution rejected by user."
+
+        results = []
+        for f in candidates:
+            try:
+                os.startfile(os.path.join(workspace, f))
+                results.append(f"Launched {f}")
+            except Exception as e:
+                results.append(f"Failed {f}: {e}")
+        return "\n".join(results)
 
     def read_file(self, filename: str):
         path = os.path.join(self.get_workspace(), filename)
@@ -79,6 +159,13 @@ class AgentTools:
 
 
     # --- Browser Control Tools ---
+    def browser_search(self, query: str):
+        """High-level search: Finds a search box on the current page, types the query, and presses enter."""
+        if not self.browser_widget:
+            return "Browser widget not connected."
+        self.ui_callback("system_msg", f"AI performing smart search: {query}")
+        return self.ui_callback("browser_action", {"action": "search", "args": {"query": query}})
+
     def browser_navigate(self, url: str):
         """Navigate the in-app browser to a URL."""
         if not self.browser_widget:
@@ -240,12 +327,36 @@ class AgentTools:
                     }
                 }
             },
+            {
+                "type": "function",
+                "function": {
+                    "name": "open_file",
+                    "description": "Opens a SPECIFIC document (Word, PowerPoint, PDF). Use '.docx' for Word, '.pptx' for PowerPoint.",
+                    "parameters": {"type": "object", "properties": {"filename": {"type": "string"}}, "required": ["filename"]}
+                }
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "open_all_word_files",
+                    "description": "CRITICAL: Use this for 'open all ms word' or 'open all docx'. Finds and opens every Word file.",
+                    "parameters": {"type": "object", "properties": {}, "required": []}
+                }
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "open_all_pptx_files",
+                    "description": "CRITICAL: Use this for 'open all ppt' or 'open all powerpoints'. Finds and opens every PowerPoint file.",
+                    "parameters": {"type": "object", "properties": {}, "required": []}
+                }
+            },
 
             {
                 "type": "function",
                 "function": {
                     "name": "browser_navigate",
-                    "description": "Navigate the in-app browser to a URL.",
+                    "description": "Navigate the browser to a URL. CRITICAL: Use ONLY for homepages (e.g. https://www.google.com). NEVER include search terms or queries in the URL.",
                     "parameters": {"type": "object", "properties": {"url": {"type": "string"}}, "required": ["url"]}
                 }
             },
@@ -301,6 +412,18 @@ class AgentTools:
                     "parameters": {
                         "type": "object",
                         "properties": {"query": {"type": "string", "description": "Question or instruction about the page screenshot."}},
+                        "required": ["query"]
+                    }
+                }
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "browser_search",
+                    "description": "CRITICAL: Finds the search box on a page and submits a query. Use this immediately after navigate_to and NEVER use browser_type for searching.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {"query": {"type": "string"}},
                         "required": ["query"]
                     }
                 }

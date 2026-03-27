@@ -30,6 +30,8 @@ class BrowserWidget(QWidget):
         self._overlay_dir = -1
         self._overlay_anim_timer = QTimer(self)
         self._overlay_anim_timer.timeout.connect(self._pulse_overlay)
+        
+        self.is_thread_locked = False
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -169,7 +171,7 @@ class BrowserWidget(QWidget):
             "  }"
             "  c.style.left = (rect.left + rect.width/2 - 10) + 'px';"
             "  c.style.top = (rect.top + rect.height/2 - 10) + 'px';"
-            "  setTimeout(() => { el.click(); }, 600);"
+            f" setTimeout(() => {{ el.dispatchEvent(new MouseEvent('mousedown',{{bubbles:true}})); el.dispatchEvent(new MouseEvent('mouseup',{{bubbles:true}})); el.click(); }}, 600);"
             "  return 'clicked';"
             "}"
             "return 'element not found';"
@@ -224,6 +226,33 @@ class BrowserWidget(QWidget):
         self.webview.page().runJavaScript(js)
         return f"Pressed Enter in {selector}"
 
+    def smart_search(self, query: str):
+        """Unified search logic that finds a box and submits."""
+        if not HAS_WEBENGINE:
+            return "Browser not available."
+        js = (
+            "(function(){"
+            "  var selectors = ['input[name=\"q\"]', 'input[type=\"search\"]', 'input[placeholder*=\"Search\"]', 'input[type=\"text\"]', 'textarea'];"
+            "  for(var s of selectors){"
+            "    var el = document.querySelector(s);"
+            "    if(el && el.offsetParent !== null){"
+            "      el.focus();"
+            "      el.value = '" + query.replace("'", "\\'") + "';"
+            "      el.dispatchEvent(new Event('input', {bubbles:true}));"
+            "      el.dispatchEvent(new Event('change', {bubbles:true}));"
+            "      setTimeout(() => {"
+            "        el.dispatchEvent(new KeyboardEvent('keydown', {key:'Enter', keyCode:13, bubbles:true}));"
+            "        el.dispatchEvent(new KeyboardEvent('keyup', {key:'Enter', keyCode:13, bubbles:true}));"
+            "      }, 100);"
+            "      return 'found and submitted';"
+            "    }"
+            "  }"
+            "  return 'no search box found';"
+            "})();"
+        )
+        self.webview.page().runJavaScript(js)
+        return f"Search for '{query}' initiated."
+
     def capture_screenshot(self):
         """Capture fixed-resolution browser screenshot for AI vision."""
         if not HAS_WEBENGINE:
@@ -237,9 +266,27 @@ class BrowserWidget(QWidget):
         js = "document.body ? document.body.innerText.substring(0,5000) : '';"
         self.webview.page().runJavaScript(js, lambda r: self.page_text_ready.emit(r or ""))
 
+    def set_thread_lock(self, locked: bool):
+        """Called by MainWindow when the AI is thinking to prevent user clicks."""
+        self.is_thread_locked = locked
+        self._update_interaction_state()
+
+    def _update_interaction_state(self):
+        """Centralized logic to decide if the browser should be locked for the user."""
+        # Lock if either AI is thinking OR Takeover (auto-approve) mode is active
+        should_lock = self.is_thread_locked or self.takeover_active
+        
+        if should_lock:
+            self.webview.setAttribute(Qt.WA_TransparentForMouseEvents, True)
+            self.webview.setFocusPolicy(Qt.NoFocus)
+        else:
+            self.webview.setAttribute(Qt.WA_TransparentForMouseEvents, False)
+            self.webview.setFocusPolicy(Qt.StrongFocus)
+
     # ── Takeover Mode ─────────────────────────────────────────────────────────
     def _toggle_takeover(self):
         self.takeover_active = self.takeover_btn.isChecked()
+        self._update_interaction_state()
         if self.takeover_active:
             self.takeover_btn.setText("\U0001f6d1 Stop Takeover")
             self.overlay_banner.show()
