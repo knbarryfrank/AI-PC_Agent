@@ -6,7 +6,7 @@ def main():
     app = QApplication(sys.argv)
     app.setStyle("Fusion")
     
-    with open("ui/styles.qss", "r") as f:
+    with open("ui/styles.qss", "r", encoding="utf-8") as f:
         app.setStyleSheet(f.read())
         
     window = MainWindow()
