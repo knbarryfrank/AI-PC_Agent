@@ -1,0 +1,79 @@
+QWidget {
+    background-color: #121212;
+    color: #E0E0E0;
+    font-family: "Segoe UI", "Roboto", "Inter", sans-serif;
+    font-size: 14px;
+}
+
+QMainWindow {
+    background-color: #121212;
+}
+
+QTabWidget::pane {
+    border: 1px solid #333333;
+    border-radius: 8px;
+    background: #1E1E1E;
+}
+
+QTabBar::tab {
+    background: #2D2D2D;
+    color: #A0A0A0;
+    padding: 10px 20px;
+    border-top-left-radius: 6px;
+    border-top-right-radius: 6px;
+    margin-right: 2px;
+}
+
+QTabBar::tab:selected {
+    background: #4A90E2;
+    color: #FFFFFF;
+    font-weight: bold;
+}
+
+QPushButton {
+    background-color: #333333;
+    color: #FFFFFF;
+    border: 1px solid #4D4D4D;
+    border-radius: 6px;
+    padding: 8px 16px;
+}
+
+QPushButton:hover {
+    background-color: #4A90E2;
+    border: 1px solid #4A90E2;
+}
+
+QPushButton:pressed {
+    background-color: #2D70BC;
+}
+
+QLineEdit, QTextEdit, QPlainTextEdit, QTextBrowser {
+    background-color: #1A1A1A;
+    color: #E0E0E0;
+    border: 1px solid #333333;
+    border-radius: 6px;
+    padding: 8px;
+}
+
+QLineEdit:focus, QTextEdit:focus, QPlainTextEdit:focus {
+    border: 1px solid #4A90E2;
+}
+
+QSplitter::handle {
+    background-color: #333333;
+    width: 2px;
+}
+
+QGroupBox {
+    border: 1px solid #4D4D4D;
+    border-radius: 8px;
+    margin-top: 15px;
+    padding-top: 20px;
+}
+
+QGroupBox::title {
+    subcontrol-origin: margin;
+    subcontrol-position: top left;
+    padding: 0 5px;
+    color: #4A90E2;
+}

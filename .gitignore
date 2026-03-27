@@ -1,0 +1,19 @@
+# Python virtual environments
+venv/
+env/
+.venv/
+Scripts/
+
+# Python cache files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# AIPC specific files
+.aipc_cache/
+aipc_config.json
+
+# IDE
+.vscode/
+.idea/
